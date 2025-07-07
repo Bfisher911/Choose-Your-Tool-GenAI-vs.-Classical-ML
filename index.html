@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Choose Your Tool: GenAI vs. Classical ML</title>
+
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js for the radar chart -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Lucide Icons for UI elements -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+
+    <!-- Custom Styles -->
+    <style>
+        /*
+        =====================================================================
+        CUSTOM STYLES & COLOR PALETTE
+        Instructors can easily modify these CSS variables to change the theme.
+        =====================================================================
+        */
+        :root {
+            --color-primary: #4f46e5; /* Indigo */
+            --color-secondary: #10b981; /* Emerald */
+            --color-accent: #f59e0b; /* Amber */
+            --color-bg-light: #f9fafb; /* Gray 50 */
+            --color-bg-dark: #1f2937; /* Gray 800 */
+            --color-text-light: #f9fafb;
+            --color-text-dark: #111827;
+            --color-border: #e5e7eb; /* Gray 200 */
+        }
+
+        /* Smooth transitions for a better user experience */
+        * {
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, opacity 0.3s ease;
+        }
+
+        /* Custom styles for highlighted recommendations */
+        .recommendation-highlight {
+            box-shadow: 0 0 15px 2px var(--color-accent);
+            border-color: var(--color-accent) !important;
+        }
+
+        /* Drag-and-drop styling */
+        .draggable-item {
+            cursor: grab;
+        }
+        .draggable-item:active {
+            cursor: grabbing;
+        }
+        .drop-canvas.drag-over {
+            border-style: dashed;
+            background-color: var(--color-bg-light);
+            border-color: var(--color-primary);
+        }
+        .flow-arrow {
+            position: absolute;
+            top: 50%;
+            right: -20px;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+            border-left: 12px solid var(--color-secondary);
+            animation: flow 1.5s linear infinite;
+        }
+        @keyframes flow {
+            0% { opacity: 0; transform: translateY(-50%) scale(0.5); }
+            50% { opacity: 1; }
+            100% { opacity: 0; transform: translateY(-50%) scale(1.2); }
+        }
+        .dropped-item:not(:last-child) .flow-arrow {
+            display: block;
+        }
+        .dropped-item .flow-arrow {
+            display: none;
+        }
+        
+        /* Tooltip pop-up styling */
+        .tooltip-popup {
+            visibility: hidden;
+            opacity: 0;
+            transition: visibility 0s, opacity 0.3s linear;
+        }
+        .tooltip-popup.show {
+            visibility: visible;
+            opacity: 1;
+        }
+        .tooltip-trigger {
+            cursor: help;
+            border-bottom: 2px dotted var(--color-primary);
+        }
+        
+        /* Style for close button on tooltip */
+        .close-tooltip-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            line-height: 1;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-900">Choose Your Tool</h1>
+            <p class="text-lg text-gray-600 mt-2">GenAI vs. Classical ML</p>
+        </header>
+
+        <!-- Main layout grid: 2 columns on desktop, 1 on mobile -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+            <!-- Left Column: Controls & Inputs -->
+            <div class="flex flex-col gap-8">
+                
+                <!-- Card: Problem Selector -->
+                <div class="bg-white p-6 rounded-xl shadow-md">
+                    <h2 class="text-2xl font-bold mb-4 text-gray-800 flex items-center gap-2"><i data-lucide="list-checks"></i> 1. Select a Problem</h2>
+                    <select id="problem-selector" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" aria-label="Select a use case scenario">
+                        <!-- Options will be populated by JavaScript -->
+                    </select>
+                </div>
+
+                <!-- Card: Feature Comparison -->
+                <div class="bg-white p-6 rounded-xl shadow-md">
+                    <h2 class="text-2xl font-bold mb-4 text-gray-800 flex items-center gap-2"><i data-lucide="swords"></i> 2. Compare Features</h2>
+                    <div id="feature-toggle" class="flex flex-wrap gap-2" role="radiogroup" aria-label="Select a feature to compare">
+                        <!-- Toggles will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Card: Hybrid Builder -->
+                <div class="bg-white p-6 rounded-xl shadow-md">
+                    <h2 class="text-2xl font-bold mb-4 text-gray-800 flex items-center gap-2"><i data-lucide="workflow"></i> 3. Build a Hybrid Flow</h2>
+                    <p class="text-sm text-gray-500 mb-4">Drag components onto the canvas to model a solution.</p>
+                    <div class="flex gap-4 mb-4">
+                        <div id="drag-genai" class="draggable-item bg-indigo-100 text-indigo-800 p-3 rounded-lg font-semibold text-center flex-grow flex items-center justify-center gap-2" draggable="true" data-type="GenAI RAG"><i data-lucide="brain-circuit"></i> GenAI RAG</div>
+                        <div id="drag-classifier" class="draggable-item bg-emerald-100 text-emerald-800 p-3 rounded-lg font-semibold text-center flex-grow flex items-center justify-center gap-2" draggable="true" data-type="Classifier"><i data-lucide="binary"></i> Classifier</div>
+                        <div id="drag-db" class="draggable-item bg-gray-200 text-gray-800 p-3 rounded-lg font-semibold text-center flex-grow flex items-center justify-center gap-2" draggable="true" data-type="Database"><i data-lucide="database"></i> Database</div>
+                    </div>
+                    <div id="drop-canvas" class="drop-canvas border-2 border-dashed border-gray-300 rounded-lg min-h-[100px] p-4 flex items-center gap-4 relative">
+                        <span class="text-gray-400">Drop here</span>
+                    </div>
+                    <button id="reset-builder-btn" class="mt-4 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 flex items-center gap-2"><i data-lucide="rotate-cw"></i> Reset</button>
+                </div>
+
+                <!-- Card: Cost Estimator -->
+                <div class="bg-white p-6 rounded-xl shadow-md">
+                    <h2 class="text-2xl font-bold mb-4 text-gray-800 flex items-center gap-2"><i data-lucide="dollar-sign"></i> 4. Estimate Monthly Cost</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="input-count" class="block text-sm font-medium text-gray-700">Tokens / Rows</label>
+                            <input type="number" id="input-count" value="1000000" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label for="compute-type" class="block text-sm font-medium text-gray-700">Compute</label>
+                            <select id="compute-type" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                                <option value="cpu">CPU</option>
+                                <option value="gpu">GPU (A100)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-6">
+                        <div class="flex justify-between items-center bg-indigo-50 p-3 rounded-lg">
+                            <span class="font-semibold text-indigo-800">GenAI Cost:</span>
+                            <span id="genai-cost" class="font-bold text-xl text-indigo-900">$0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center bg-emerald-50 p-3 rounded-lg mt-2">
+                            <span class="font-semibold text-emerald-800">Classical ML Cost:</span>
+                            <span id="classical-cost" class="font-bold text-xl text-emerald-900">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Column: Visuals & Explanations -->
+            <div class="flex flex-col gap-8">
+                
+                <!-- Card: Recommendation -->
+                <div id="recommendation-output" class="bg-white p-6 rounded-xl shadow-md">
+                    <h2 class="text-2xl font-bold mb-2 text-gray-800 flex items-center gap-2"><i data-lucide="award"></i> Recommendation</h2>
+                    <div class="flex flex-col md:flex-row gap-4 mt-4">
+                        <div id="rec-genai" class="flex-1 p-4 border-2 border-gray-200 rounded-lg text-center">
+                            <h3 class="font-bold text-lg text-indigo-700">GenAI</h3>
+                        </div>
+                        <div id="rec-classical" class="flex-1 p-4 border-2 border-gray-200 rounded-lg text-center">
+                            <h3 class="font-bold text-lg text-emerald-700">Classical ML</h3>
+                        </div>
+                         <div id="rec-hybrid" class="flex-1 p-4 border-2 border-gray-200 rounded-lg text-center">
+                            <h3 class="font-bold text-lg text-amber-700">Hybrid</h3>
+                        </div>
+                    </div>
+                    <p id="recommendation-text" class="mt-4 text-gray-600">Select a problem to see our recommendation and an explanation.</p>
+                </div>
+
+                <!-- Card: Radar Chart -->
+                <div class="bg-white p-6 rounded-xl shadow-md">
+                    <h2 class="text-2xl font-bold mb-4 text-gray-800 flex items-center gap-2"><i data-lucide="radar"></i> Feature Comparison</h2>
+                    <canvas id="radar-chart"></canvas>
+                </div>
+                
+                <!-- Card: Explanations & Key Terms -->
+                <div class="bg-white p-6 rounded-xl shadow-md">
+                    <h2 class="text-2xl font-bold mb-4 text-gray-800 flex items-center gap-2"><i data-lucide="book-open"></i> Key Terms</h2>
+                    <p class="text-gray-600">
+                        GenAI models can sometimes produce plausible but incorrect or nonsensical outputs, a phenomenon known as 
+                        <strong class="tooltip-trigger" data-tooltip="hallucination">hallucination</strong>.
+                        In contrast, classical models can suffer from concept 
+                        <strong class="tooltip-trigger" data-tooltip="drift">drift</strong>, where performance degrades over time as data distributions change.
+                        GenAI pricing is often based on the number of 
+                        <strong class="tooltip-trigger" data-tooltip="token">tokens</strong> (pieces of words) processed.
+                    </p>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Tooltip Popups -->
+    <div id="tooltip-hallucination" class="tooltip-popup fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-11/12 max-w-md bg-white p-6 rounded-xl shadow-2xl z-50">
+        <button class="close-tooltip close-tooltip-btn absolute top-2 right-2 text-gray-500 hover:text-gray-800" aria-label="Close tooltip">&times;</button>
+        <h3 class="text-xl font-bold text-indigo-600 mb-2">Hallucination</h3>
+        <p class="text-gray-700">Refers to a phenomenon where a large language model (LLM) generates text that is nonsensical, factually incorrect, or disconnected from the provided source content. It's like the model is "making things up" because it doesn't truly understand concepts but rather predicts the next most likely word sequence.</p>
+    </div>
+    <div id="tooltip-drift" class="tooltip-popup fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-11/12 max-w-md bg-white p-6 rounded-xl shadow-2xl z-50">
+        <button class="close-tooltip close-tooltip-btn absolute top-2 right-2 text-gray-500 hover:text-gray-800" aria-label="Close tooltip">&times;</button>
+        <h3 class="text-xl font-bold text-emerald-600 mb-2">Model Drift</h3>
+        <p class="text-gray-700">This occurs when the statistical properties of the target variable or input features change over time, causing the model's predictive performance to degrade. For example, a sales prediction model trained on pre-pandemic data may perform poorly on post-pandemic data due to shifts in consumer behavior.</p>
+    </div>
+    <div id="tooltip-token" class="tooltip-popup fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-11/12 max-w-md bg-white p-6 rounded-xl shadow-2xl z-50">
+        <button class="close-tooltip close-tooltip-btn absolute top-2 right-2 text-gray-500 hover:text-gray-800" aria-label="Close tooltip">&times;</button>
+        <h3 class="text-xl font-bold text-gray-800 mb-2">Token</h3>
+        <p class="text-gray-700">A token is a fundamental unit of text that a language model processes. It can be a word, a part of a word (like "ing"), or a punctuation mark. For example, the phrase "machine learning" consists of two tokens. GenAI costs are often calculated per 1,000 tokens for both input and output.</p>
+    </div>
+    <div id="tooltip-overlay" class="tooltip-popup fixed inset-0 bg-black bg-opacity-50 z-40"></div>
+
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        
+        // =====================================================================
+        // DATA STORE
+        // Instructor's Note: All configurable data is centralized here.
+        // You can add/remove scenarios, change feature scores, and update
+        // recommendation text easily without touching the rest of the code.
+        // =====================================================================
+        const appData = {
+            scenarios: [
+                {
+                    id: 'default',
+                    name: 'Select a scenario...',
+                    recommendation: 'none',
+                    explanation: 'Select a problem to see our recommendation and an explanation.'
+                },
+                {
+                    id: 'blog-intro',
+                    name: 'Generate a blog post introduction',
+                    recommendation: 'genai',
+                    explanation: 'Generative AI excels at creative text generation. It can quickly produce multiple engaging and contextually relevant introductions based on a simple prompt.'
+                },
+                {
+                    id: 'monthly-sales',
+                    name: 'Predict next month\'s sales',
+                    recommendation: 'classical',
+                    explanation: 'This is a classic time-series forecasting problem. Classical ML models (like ARIMA or XGBoost) are highly effective, interpretable, and computationally efficient for structured numerical data.'
+                },
+                {
+                    id: 'support-tickets',
+                    name: 'Classify incoming support tickets',
+                    recommendation: 'hybrid',
+                    explanation: 'A hybrid approach is often best. A classical classifier can handle common, well-defined categories with high speed and low cost, while a GenAI model can be used to understand and route novel or complex user queries that don\'t fit existing labels.'
+                },
+                {
+                    id: 'product-description',
+                    name: 'Write product descriptions for an e-commerce site',
+                    recommendation: 'genai',
+                    explanation: 'GenAI can generate unique, persuasive, and SEO-friendly product descriptions at scale, adapting the tone and style based on product attributes.'
+                },
+                {
+                    id: 'fraud-detection',
+                    name: 'Detect fraudulent credit card transactions',
+                    recommendation: 'classical',
+                    explanation: 'Classical ML models (like Isolation Forests or Logistic Regression) are optimized for anomaly detection in structured transaction data. They provide the speed and reliability required for real-time fraud detection systems.'
+                }
+            ],
+            features: {
+                // Scores are out of 10. Higher is better.
+                performance: { name: 'Performance & Accuracy', genai: 8, classical: 9 },
+                cost: { name: 'Cost Efficiency', genai: 5, classical: 9 },
+                latency: { name: 'Speed (Low Latency)', genai: 6, classical: 9 },
+                governance: { name: 'Governance & Interpretability', genai: 4, classical: 8 },
+                creativity: { name: 'Creativity & Novelty', genai: 10, classical: 2 },
+                scalability: { name: 'Data Scalability', genai: 9, classical: 7 }
+            },
+            costFormulas: {
+                // Instructor's Note: These are simplified mock formulas.
+                // You can replace them with more complex, realistic models.
+                genai: {
+                    per_token_cpu: 0.0000015, // $/token on CPU
+                    per_token_gpu: 0.0000020, // $/token on GPU (e.g., A100)
+                },
+                classical: {
+                    per_row_cpu: 0.0000005, // $/row for training/inference on CPU
+                    per_row_gpu: 0.0000050, // $/row for training/inference on GPU
+                }
+            }
+        };
+
+        // =====================================================================
+        // ELEMENT SELECTORS
+        // Caching DOM elements for performance.
+        // =====================================================================
+        const problemSelector = document.getElementById('problem-selector');
+        const recommendationText = document.getElementById('recommendation-text');
+        const recGenAI = document.getElementById('rec-genai');
+        const recClassical = document.getElementById('rec-classical');
+        const recHybrid = document.getElementById('rec-hybrid');
+        const featureToggleContainer = document.getElementById('feature-toggle');
+        const radarChartCanvas = document.getElementById('radar-chart');
+        const costInput = document.getElementById('input-count');
+        const computeSelector = document.getElementById('compute-type');
+        const genaiCostOutput = document.getElementById('genai-cost');
+        const classicalCostOutput = document.getElementById('classical-cost');
+        const dropCanvas = document.getElementById('drop-canvas');
+        const draggableItems = document.querySelectorAll('.draggable-item');
+        const resetBuilderBtn = document.getElementById('reset-builder-btn');
+        const tooltipTriggers = document.querySelectorAll('.tooltip-trigger');
+        const tooltipPopups = document.querySelectorAll('.tooltip-popup');
+        const closeButtons = document.querySelectorAll('.close-tooltip');
+        const tooltipOverlay = document.getElementById('tooltip-overlay');
+        
+        let radarChart;
+
+        // =====================================================================
+        // INITIALIZATION
+        // Functions to set up the application on page load.
+        // =====================================================================
+
+        function init() {
+            populateProblemSelector();
+            populateFeatureToggles();
+            setupEventListeners();
+            updateRecommendation(); // Initial state
+            createOrUpdateRadarChart(); // Initial chart
+            updateCost(); // Initial cost
+            lucide.createIcons(); // Render all icons
+        }
+
+        function populateProblemSelector() {
+            appData.scenarios.forEach(scenario => {
+                const option = document.createElement('option');
+                option.value = scenario.id;
+                option.textContent = scenario.name;
+                problemSelector.appendChild(option);
+            });
+        }
+
+        function populateFeatureToggles() {
+            Object.keys(appData.features).forEach((key, index) => {
+                const feature = appData.features[key];
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.role = 'radio';
+                button.dataset.feature = key;
+                button.textContent = feature.name;
+                button.className = 'px-3 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500';
+                if (index === 0) {
+                    button.classList.add('bg-indigo-600', 'text-white');
+                    button.setAttribute('aria-checked', 'true');
+                } else {
+                    button.classList.add('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300');
+                    button.setAttribute('aria-checked', 'false');
+                }
+                featureToggleContainer.appendChild(button);
+            });
+        }
+
+
+        // =====================================================================
+        // EVENT LISTENERS
+        // Centralized setup for all user interactions.
+        // =====================================================================
+
+        function setupEventListeners() {
+            problemSelector.addEventListener('change', updateRecommendation);
+            costInput.addEventListener('input', updateCost);
+            computeSelector.addEventListener('change', updateCost);
+            resetBuilderBtn.addEventListener('click', resetBuilder);
+
+            // Event delegation for feature toggles
+            featureToggleContainer.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON') {
+                    handleFeatureToggle(e.target.dataset.feature);
+                }
+            });
+
+            // Drag and Drop Listeners
+            draggableItems.forEach(item => {
+                item.addEventListener('dragstart', handleDragStart);
+            });
+            dropCanvas.addEventListener('dragover', handleDragOver);
+            dropCanvas.addEventListener('dragleave', handleDragLeave);
+            dropCanvas.addEventListener('drop', handleDrop);
+            
+            // Tooltip Listeners
+            tooltipTriggers.forEach(trigger => {
+                trigger.addEventListener('click', () => showTooltip(trigger.dataset.tooltip));
+            });
+            closeButtons.forEach(button => {
+                button.addEventListener('click', hideAllTooltips);
+            });
+            tooltipOverlay.addEventListener('click', hideAllTooltips);
+        }
+
+        // =====================================================================
+        // CORE LOGIC FUNCTIONS
+        // These functions handle the main application logic.
+        // =====================================================================
+
+        // --- 1. Problem Recommendation ---
+        function updateRecommendation() {
+            const selectedId = problemSelector.value;
+            const scenario = appData.scenarios.find(s => s.id === selectedId);
+
+            recommendationText.textContent = scenario.explanation;
+            
+            // Reset all highlights
+            [recGenAI, recClassical, recHybrid].forEach(el => el.classList.remove('recommendation-highlight'));
+
+            // Apply highlight to the recommended
+            if (scenario.recommendation === 'genai') {
+                recGenAI.classList.add('recommendation-highlight');
+            } else if (scenario.recommendation === 'classical') {
+                recClassical.classList.add('recommendation-highlight');
+            } else if (scenario.recommendation === 'hybrid') {
+                recHybrid.classList.add('recommendation-highlight');
+            }
+        }
+
+        // --- 2. Feature Comparison (Radar Chart) ---
+        function handleFeatureToggle(selectedFeatureKey) {
+            // Update button styles
+            const buttons = featureToggleContainer.querySelectorAll('button');
+            buttons.forEach(button => {
+                if (button.dataset.feature === selectedFeatureKey) {
+                    button.classList.remove('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300');
+                    button.classList.add('bg-indigo-600', 'text-white');
+                    button.setAttribute('aria-checked', 'true');
+                } else {
+                    button.classList.remove('bg-indigo-600', 'text-white');
+                    button.classList.add('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300');
+                    button.setAttribute('aria-checked', 'false');
+                }
+            });
+            createOrUpdateRadarChart(); // Redraw chart with all features
+        }
+
+        function createOrUpdateRadarChart() {
+            const labels = Object.values(appData.features).map(f => f.name);
+            const genaiData = Object.values(appData.features).map(f => f.genai);
+            const classicalData = Object.values(appData.features).map(f => f.classical);
+
+            const data = {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'GenAI',
+                        data: genaiData,
+                        backgroundColor: 'rgba(79, 70, 229, 0.2)', // Indigo
+                        borderColor: 'rgba(79, 70, 229, 1)',
+                        pointBackgroundColor: 'rgba(79, 70, 229, 1)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgba(79, 70, 229, 1)',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Classical ML',
+                        data: classicalData,
+                        backgroundColor: 'rgba(16, 185, 129, 0.2)', // Emerald
+                        borderColor: 'rgba(16, 185, 129, 1)',
+                        pointBackgroundColor: 'rgba(16, 185, 129, 1)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgba(16, 185, 129, 1)',
+                        borderWidth: 2
+                    }
+                ]
+            };
+
+            const config = {
+                type: 'radar',
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        r: {
+                            angleLines: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            },
+                            pointLabels: {
+                                font: {
+                                    size: 12,
+                                    weight: 'bold'
+                                }
+                            },
+                            ticks: {
+                                beginAtZero: true,
+                                max: 10,
+                                stepSize: 2,
+                                backdropColor: 'rgba(255, 255, 255, 0.75)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            enabled: true
+                        }
+                    },
+                    animation: {
+                        duration: 500 // Smooth transition for redraws
+                    }
+                }
+            };
+            
+            if (radarChart) {
+                radarChart.destroy();
+            }
+            radarChart = new Chart(radarChartCanvas, config);
+        }
+
+        // --- 3. Hybrid Builder (Drag & Drop) ---
+        function handleDragStart(e) {
+            e.dataTransfer.setData('text/plain', e.target.dataset.type);
+            e.dataTransfer.effectAllowed = 'copy';
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault(); // Necessary to allow dropping
+            dropCanvas.classList.add('drag-over');
+            e.dataTransfer.dropEffect = 'copy';
+        }
+        
+        function handleDragLeave(e) {
+            dropCanvas.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            dropCanvas.classList.remove('drag-over');
+            const componentType = e.dataTransfer.getData('text/plain');
+            
+            // Clear placeholder if it's the first item
+            if (dropCanvas.querySelector('span')) {
+                dropCanvas.innerHTML = '';
+            }
+
+            // Create and append the new item
+            const newItem = document.createElement('div');
+            newItem.textContent = componentType;
+            newItem.className = 'dropped-item relative p-3 rounded-lg font-semibold text-center text-white';
+            
+            // Add arrow for data flow visualization
+            const arrow = document.createElement('div');
+            arrow.className = 'flow-arrow';
+            newItem.appendChild(arrow);
+            
+            // Style based on type
+            if (componentType === 'GenAI RAG') {
+                newItem.classList.add('bg-indigo-600');
+            } else if (componentType === 'Classifier') {
+                newItem.classList.add('bg-emerald-600');
+            } else {
+                newItem.classList.add('bg-gray-600');
+            }
+            
+            dropCanvas.appendChild(newItem);
+        }
+        
+        function resetBuilder() {
+            dropCanvas.innerHTML = '<span class="text-gray-400">Drop here</span>';
+        }
+
+
+        // --- 4. Cost Estimator ---
+        function updateCost() {
+            const count = parseFloat(costInput.value) || 0;
+            const compute = computeSelector.value;
+            const formulas = appData.costFormulas;
+
+            let genaiCost, classicalCost;
+
+            if (compute === 'gpu') {
+                genaiCost = count * formulas.genai.per_token_gpu;
+                classicalCost = count * formulas.classical.per_row_gpu;
+            } else { // cpu
+                genaiCost = count * formulas.genai.per_token_cpu;
+                classicalCost = count * formulas.classical.per_row_cpu;
+            }
+
+            genaiCostOutput.textContent = `$${genaiCost.toFixed(2)}`;
+            classicalCostOutput.textContent = `$${classicalCost.toFixed(2)}`;
+        }
+        
+        // --- 5. Tooltip Popups ---
+        function showTooltip(tooltipId) {
+            hideAllTooltips(); // Hide any other open tooltips first
+            const tooltip = document.getElementById(`tooltip-${tooltipId}`);
+            if (tooltip) {
+                tooltip.classList.add('show');
+                tooltipOverlay.classList.add('show');
+            }
+        }
+
+        function hideAllTooltips() {
+            tooltipPopups.forEach(popup => popup.classList.remove('show'));
+        }
+
+        // =====================================================================
+        // START THE APP
+        // =====================================================================
+        init();
+    });
+    </script>
+
+</body>
+</html>
